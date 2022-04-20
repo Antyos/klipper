@@ -12,10 +12,13 @@ class AdhesiveParser:
         # Register macros
         self.gcode = self.printer.lookup_object('gcode')
         self.gcode.register_command(
-            'RUN_ADHESIVE', self.cmd_RUN_ADHESIVE, desc=self.cmd_RUN_ADHESIVE_help
+            'RUN_ADHESIVE', self.cmd_RUN_ADHESIVE,
+            desc=self.cmd_RUN_ADHESIVE_help
         )
 
-    
+    def _run_adhesive(self, infile, outfile=None):
+        pass
+
     # TODO
     def cmd_GET_PARSER_PARAMETERS(self, gcmd):
         pass
