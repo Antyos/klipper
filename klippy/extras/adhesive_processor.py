@@ -6,8 +6,8 @@ class AdhesiveParser:
         self.buffer_distance = config.getfloat('buffer_distance', 5, minval=0.)
         self.spray_diameter = config.getfloat('spray_diameter', 10, minval=0.)
         self.travel_speed = config.getint('travel_speed', 7000, above=0.)
-        self.extrude_speed = config.getint('extrude_speed', 7000, above=0.)
-        self.extrude_distance = config.getint('extrude_distance', 50000, above=0.)
+        self.extrude_speed = config.getint('extrude_speed', 50000, above=0.)
+        self.extrude_distance = config.getint('extrude_distance', 1, above=0.)
 
         # Register macros
         self.gcode = self.printer.lookup_object('gcode')
