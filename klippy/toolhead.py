@@ -4,7 +4,7 @@
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import math, logging, importlib
-import mcu, chelper, kinematics.extruder
+import mcu, chelper, kinematics.extruder, kinematics.cold_extruder
 
 # Common suffixes: _d is distance (in mm), _v is velocity (in
 #   mm/second), _v2 is velocity squared (mm^2/s^2), _t is time (in
@@ -598,3 +598,4 @@ class ToolHead:
 def add_printer_objects(config):
     config.get_printer().add_object('toolhead', ToolHead(config))
     kinematics.extruder.add_printer_objects(config)
+    kinematics.cold_extruder.add_printer_objects(config)

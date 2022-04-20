@@ -4,7 +4,7 @@
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import math, logging
-import stepper, chelper
+import chelper
 from extruder import ExtruderStepper
 
 # Tracking for hotend heater, extrusion motion queue, and extruder stepper
@@ -14,14 +14,14 @@ class PrinterColdExtruder:
         self.name = config.get_name()
         self.last_position = 0.
         # Setup hotend heater
-        shared_heater = config.get('shared_heater', None)
-        pheaters = self.printer.load_object(config, 'heaters')
-        gcode_id = 'T%d' % (extruder_num,)
-        if shared_heater is None:
-            self.heater = pheaters.setup_heater(config, gcode_id)
-        else:
-            config.deprecate('shared_heater')
-            self.heater = pheaters.lookup_heater(shared_heater)
+        #shared_heater = config.get('shared_heater', None)
+        #pheaters = self.printer.load_object(config, 'heaters')
+        #gcode_id = 'T%d' % (extruder_num,)
+        #if shared_heater is None:
+        #    self.heater = pheaters.setup_heater(config, gcode_id)
+        #else:
+        #    config.deprecate('shared_heater')
+        #    self.heater = pheaters.lookup_heater(shared_heater)
         # Setup kinematic checks
         self.nozzle_diameter = config.getfloat('nozzle_diameter', above=0.)
         filament_diameter = config.getfloat(
@@ -63,35 +63,29 @@ class PrinterColdExtruder:
             self.extruder_stepper._set_pressure_advance(pa, smooth_time)
         # Register commands
         gcode = self.printer.lookup_object('gcode')
-        if self.name == 'extruder':
+        if self.name == 'cold_extruder':
             toolhead.set_extruder(self, 0.)
-            gcode.register_command("M104", self.cmd_M104)
-            gcode.register_command("M109", self.cmd_M109)
         gcode.register_mux_command("ACTIVATE_EXTRUDER", "EXTRUDER",
                                    self.name, self.cmd_ACTIVATE_EXTRUDER,
                                    desc=self.cmd_ACTIVATE_EXTRUDER_help)
     def update_move_time(self, flush_time):
         self.trapq_finalize_moves(self.trapq, flush_time)
-    def get_status(self, eventtime):
-        sts = self.heater.get_status(eventtime)
-        sts['can_extrude'] = self.heater.can_extrude
-        if self.extruder_stepper is not None:
-            sts.update(self.extruder_stepper.get_status(eventtime))
-        return sts
+    # def get_status(self, eventtime):
+    #     sts = self.heater.get_status(eventtime)
+    #     sts['can_extrude'] = self.heater.can_extrude
+    #     if self.extruder_stepper is not None:
+    #         sts.update(self.extruder_stepper.get_status(eventtime))
+    #     return sts
     def get_name(self):
         return self.name
     def get_heater(self):
-        return self.heater
+        raise self.printer.command_error("ColdExtruder has no heaters")
     def get_trapq(self):
-        return self.trapq
-    def stats(self, eventtime):
-        return self.heater.stats(eventtime)
+        raise self.printer.command_error("ColdExtruder has no trapq")
+    # def stats(self, eventtime):
+    #     return self.heater.stats(eventtime)
     def check_move(self, move):
         axis_r = move.axes_r[3]
-        if not self.heater.can_extrude:
-            raise self.printer.command_error(
-                "Extrude below minimum temp\n"
-                "See the 'min_extrude_temp' config option for details")
         if (not move.axes_d[0] and not move.axes_d[1]) or axis_r < 0.:
             # Extrude only move (or retraction move) - limit accel and velocity
             if abs(move.axes_d[3]) > self.max_e_dist:
@@ -123,9 +117,7 @@ class PrinterColdExtruder:
         accel = move.accel * axis_r
         start_v = move.start_v * axis_r
         cruise_v = move.cruise_v * axis_r
-        can_pressure_advance = False
-        if axis_r > 0. and (move.axes_d[0] or move.axes_d[1]):
-            can_pressure_advance = True
+        can_pressure_advance = bool(axis_r > 0. and (move.axes_d[0] or move.axes_d[1]))
         # Queue movement (x is extruder movement, y is pressure advance flag)
         self.trapq_append(self.trapq, print_time,
                           move.accel_t, move.cruise_t, move.decel_t,
@@ -137,26 +129,6 @@ class PrinterColdExtruder:
         if self.extruder_stepper is None:
             return 0.
         return self.extruder_stepper.find_past_position(print_time)
-    def cmd_M104(self, gcmd, wait=False):
-        # Set Extruder Temperature
-        temp = gcmd.get_float('S', 0.)
-        index = gcmd.get_int('T', None, minval=0)
-        if index is not None:
-            section = 'extruder'
-            if index:
-                section = 'extruder%d' % (index,)
-            extruder = self.printer.lookup_object(section, None)
-            if extruder is None:
-                if temp <= 0.:
-                    return
-                raise gcmd.error("Extruder not configured")
-        else:
-            extruder = self.printer.lookup_object('toolhead').get_extruder()
-        pheaters = self.printer.lookup_object('heaters')
-        pheaters.set_temperature(extruder.get_heater(), temp, wait)
-    def cmd_M109(self, gcmd):
-        # Set Extruder Temperature and Wait
-        self.cmd_M104(gcmd, wait=True)
     cmd_ACTIVATE_EXTRUDER_help = "Change the active extruder"
     def cmd_ACTIVATE_EXTRUDER(self, gcmd):
         toolhead = self.printer.lookup_object('toolhead')
@@ -171,10 +143,10 @@ class PrinterColdExtruder:
 def add_printer_objects(config):
     printer = config.get_printer()
     for i in range(99):
-        section = 'extruder'
+        section = 'cold_extruder'
         if i:
-            section = 'extruder%d' % (i,)
+            section = 'cold_extruder%d' % (i,)
         if not config.has_section(section):
             break
-        pe = PrinterColdExtruder(config.getsection(section), i)
-        printer.add_object(section, pe)
+        pce = PrinterColdExtruder(config.getsection(section), i)
+        printer.add_object(section, pce)
